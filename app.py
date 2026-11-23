@@ -1,7 +1,7 @@
 import os
 import sqlite3
 from datetime import datetime
-from flask import Flask, request, jsonify, render_template_string
+from flask import Flask, request, jsonify, render_template_string, Response
 
 app = Flask(__name__)
 
@@ -14,6 +14,13 @@ PAYMENT_RATES = {
     "Kart / Apple Pay / Google Pay": 1.5,
     "Nağd ödəniş": 0.0,
 }
+
+SVG_ICON = """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="110" fill="#0f172a"/>
+  <rect x="44" y="44" width="424" height="424" rx="82" fill="#1e293b" stroke="#334155" stroke-width="8"/>
+  <text x="256" y="215" text-anchor="middle" fill="#38bdf8" font-family="Arial, sans-serif" font-size="112" font-weight="900">BM</text>
+  <text x="256" y="335" text-anchor="middle" fill="#22c55e" font-family="Arial, sans-serif" font-size="82" font-weight="800">+₼</text>
+</svg>"""
 
 
 def init_db():
@@ -115,6 +122,13 @@ HTML_PAGE = """<!DOCTYPE html>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="theme-color" content="#0f172a" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Birmarket Panel" />
+  <link rel="manifest" href="/manifest.json" />
+  <link rel="icon" type="image/svg+xml" href="/icon.svg" />
+  <link rel="apple-touch-icon" href="/icon.svg" />
   <title>Birmarket Mobil Mənfəət Paneli</title>
   <style>
     :root {
@@ -320,6 +334,12 @@ HTML_PAGE = """<!DOCTYPE html>
   </div>
 
   <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js').catch(() => {});
+      });
+    }
+
     let allCats = [];
 
     async function loadCategories() {
@@ -491,6 +511,51 @@ HTML_PAGE = """<!DOCTYPE html>
 @app.route("/")
 def index():
     return render_template_string(HTML_PAGE)
+
+
+@app.route("/manifest.json")
+def manifest():
+    data = """{
+      "name": "Birmarket Mobil Panel",
+      "short_name": "Birmarket Panel",
+      "description": "Birmarket sifariş qəbulu və xalis mənfəət hesabı",
+      "start_url": "/",
+      "scope": "/",
+      "display": "standalone",
+      "orientation": "portrait",
+      "background_color": "#0f172a",
+      "theme_color": "#0f172a",
+      "icons": [
+        {
+          "src": "/icon.svg",
+          "sizes": "any",
+          "type": "image/svg+xml",
+          "purpose": "any maskable"
+        }
+      ]
+    }"""
+    return Response(data, mimetype="application/manifest+json")
+
+
+@app.route("/sw.js")
+def service_worker():
+    js = """
+    self.addEventListener('install', event => {
+      self.skipWaiting();
+    });
+    self.addEventListener('activate', event => {
+      event.waitUntil(self.clients.claim());
+    });
+    self.addEventListener('fetch', event => {
+      event.respondWith(fetch(event.request));
+    });
+    """
+    return Response(js, mimetype="application/javascript")
+
+
+@app.route("/icon.svg")
+def icon_svg():
+    return Response(SVG_ICON, mimetype="image/svg+xml")
 
 
 @app.route("/api/categories")
